@@ -1,0 +1,1 @@
+to use first time if you not installed python install from the official website. extract the zip of relese and open first_start.bat after this you can open Breadcrumbs remove_language_and_subtitles_video.py
