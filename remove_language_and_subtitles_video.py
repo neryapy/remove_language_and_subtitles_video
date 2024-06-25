@@ -20,6 +20,7 @@ def list_streams(input_video_path):
     except ffmpeg.Error as e:
         print(f"Error processing {input_video_path}: {e.stderr.decode()}", file=sys.stderr)
 
+
 def list_audio_tracks(input_video_path):
     try:
         # Probe the video to find the audio tracks
@@ -34,13 +35,6 @@ def list_audio_tracks(input_video_path):
     except ffmpeg.Error as e:
         print(f"Error processing {input_video_path}: {e.stderr.decode()}", file=sys.stderr)
 
-def run_ffmpeg_with_progress(ffmpeg_cmd):
-    process = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    for line in process.stderr:
-        if "frame=" in line:
-            # Here you can parse the ffmpeg output to calculate progress if needed
-            pass
-    process.communicate(input=b'y\n')
 
 def remove_audio_track(input_video_path, output_video_path, language_code):
     try:
@@ -68,11 +62,13 @@ def remove_audio_track(input_video_path, output_video_path, language_code):
             '-c:v', 'copy', '-c:a', 'copy', output_video_path
         ]
 
-        # Execute the ffmpeg command with progress tracking
-        run_ffmpeg_with_progress(ffmpeg_cmd)
+        # Execute the ffmpeg command with input redirected to always say "y" for overwrite
+        p = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p.communicate(input=b'y\n')  # Automatically answers "y" to the overwrite prompt
 
     except ffmpeg.Error as e:
         print(f"Error processing {input_video_path}: {e.stderr.decode()}", file=sys.stderr)
+
 
 def remove_subtitle_tracks(input_video_path, output_video_path):
     try:
@@ -93,31 +89,37 @@ def remove_subtitle_tracks(input_video_path, output_video_path):
             '-c:v', 'copy', '-c:a', 'copy', output_video_path
         ]
 
-        # Execute the ffmpeg command with progress tracking
-        run_ffmpeg_with_progress(ffmpeg_cmd)
+        # Execute the ffmpeg command with input redirected to always say "y" for overwrite
+        p = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p.communicate(input=b'y\n')  # Automatically answers "y" to the overwrite prompt
 
     except ffmpeg.Error as e:
         print(f"Error processing {input_video_path}: {e.stderr.decode()}", file=sys.stderr)
+
 
 def process_videos_in_folder(input_folder, output_folder, language_code, with_sub):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    total_files = sum([len(files) for _, _, files in os.walk(input_folder)])
-    progress_bar = tqdm(total=total_files, desc='Processing videos', unit='file')
-
     for root, dirs, files in os.walk(input_folder):
-        for file in files:
-            if file.endswith(('.mp4', '.mkv', '.avi', '.mov')):
+        video_files = [file for file in files if file.endswith(('.mp4', '.mkv', '.avi', '.mov'))]
+        if not video_files:
+            continue
+
+        # Get the parent folder name where the video file is located
+        parent_folder_name = os.path.basename(root)
+        output_subfolder = os.path.join(output_folder, parent_folder_name)
+
+        if not os.path.exists(output_subfolder):
+            os.makedirs(output_subfolder)
+
+        # Initialize tqdm progress bar
+        with tqdm(total=len(video_files), desc=f"Processing videos in {root}") as pbar:
+            for file in video_files:
                 input_video_path = os.path.join(root, file)
-                output_video_path = os.path.join(output_folder, file)
+                output_video_path = os.path.join(output_subfolder, file)
+
                 try:
-                    progress_bar.set_description(f'Processing {file}')
-
-                    if not os.path.exists(input_video_path):
-                        print(f"File {input_video_path} does not exist.")
-                        continue
-
                     list_audio_tracks(input_video_path)
 
                     # Create a temporary file path for processing with subtitles removed
@@ -141,9 +143,9 @@ def process_videos_in_folder(input_folder, output_folder, language_code, with_su
                     print(f"Error processing {input_video_path}: {str(e)}")
                     continue
 
-                progress_bar.update(1)
+                # Update the progress bar
+                pbar.update(1)
 
-    progress_bar.close()
 
 if __name__ == "__main__":
     input_folder = input("Enter the input folder path: ")
@@ -152,4 +154,5 @@ if __name__ == "__main__":
     with_sub = input("Do you want to remove subtitles (y-yes, n-no)? ").strip().lower()
 
     process_videos_in_folder(input_folder, output_folder, language_code, with_sub)
-    input("end")
+
+input("end")
